@@ -1,0 +1,41 @@
+{
+  "name": "pi-panels",
+  "version": "0.1.0",
+  "description": "Standalone status panels for pi - git info, LLM context usage, and provider plan usage below the editor",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "footer",
+    "panels",
+    "status-panels"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/serabi/pi-panels"
+  },
+  "homepage": "https://github.com/serabi/pi-panels#readme",
+  "bugs": {
+    "url": "https://github.com/serabi/pi-panels/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "files": [
+    "extensions",
+    "assets",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@mariozechner/pi-ai": "*",
+    "@sinclair/typebox": "*"
+  }
+}
