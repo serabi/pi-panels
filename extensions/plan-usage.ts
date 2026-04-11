@@ -155,10 +155,12 @@ async function fetchAnthropicUsage(): Promise<PlanSnapshot> {
 
   const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
   try {
-    const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
+    const res = await fetch('https://api.anthropic.com/oauth/usage', {
       headers: {
         Authorization: `Bearer ${token}`,
-        'anthropic-beta': 'oauth-2025-04-20',
+        'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
+        'user-agent': 'claude-cli/2.1.75',
+        'x-app': 'cli',
       },
       signal: controller.signal,
     });
