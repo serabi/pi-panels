@@ -123,12 +123,11 @@ function toUsedPercentFromRemaining(remainingFraction: number): number {
   return normalizeUsedPercent((1 - fraction) * 100);
 }
 
-function loadAnthropicToken(): string | undefined {
-  const envToken = process.env.ANTHROPIC_OAUTH_TOKEN?.trim();
-  if (envToken) return envToken;
+function loadAnthropicTokenCandidates(): string[] {
+  const candidates: string[] = [];
 
-  const piAuth = readJson(join(homedir(), '.pi', 'agent', 'auth.json'));
-  if (typeof piAuth?.anthropic?.access === 'string') return piAuth.anthropic.access;
+  const envToken = process.env.ANTHROPIC_OAUTH_TOKEN?.trim();
+  if (envToken) candidates.push(envToken);
 
   try {
     const keychainData = execFileSync(
@@ -136,23 +135,25 @@ function loadAnthropicToken(): string | undefined {
       ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
     ).trim();
-    if (!keychainData) return undefined;
-    const parsed = JSON.parse(keychainData);
-    const scopes = parsed?.claudeAiOauth?.scopes || [];
-    if (Array.isArray(scopes) && scopes.includes('user:profile')) {
-      return parsed?.claudeAiOauth?.accessToken;
+    if (keychainData) {
+      const parsed = JSON.parse(keychainData);
+      const scopes = parsed?.claudeAiOauth?.scopes || [];
+      if (Array.isArray(scopes) && scopes.includes('user:profile')) {
+        const token = parsed?.claudeAiOauth?.accessToken;
+        if (typeof token === 'string' && token.length > 0) candidates.push(token);
+      }
     }
   } catch {
     // ignore
   }
 
-  return undefined;
+  const piAuth = readJson(join(homedir(), '.pi', 'agent', 'auth.json'));
+  if (typeof piAuth?.anthropic?.access === 'string') candidates.push(piAuth.anthropic.access);
+
+  return candidates;
 }
 
-async function fetchAnthropicUsage(): Promise<PlanSnapshot> {
-  const token = loadAnthropicToken();
-  if (!token) return emptySnapshot('anthropic');
-
+async function tryAnthropicToken(token: string): Promise<PlanSnapshot | undefined> {
   const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
   try {
     const res = await fetch('https://api.anthropic.com/oauth/usage', {
@@ -165,6 +166,7 @@ async function fetchAnthropicUsage(): Promise<PlanSnapshot> {
       signal: controller.signal,
     });
     clear();
+    if (res.status === 401 || res.status === 403) return undefined;
     if (!res.ok) return emptySnapshot('anthropic');
 
     const data = (await res.json()) as {
@@ -214,8 +216,17 @@ async function fetchAnthropicUsage(): Promise<PlanSnapshot> {
     };
   } catch {
     clear();
-    return emptySnapshot('anthropic');
+    return undefined;
   }
+}
+
+async function fetchAnthropicUsage(): Promise<PlanSnapshot> {
+  const candidates = loadAnthropicTokenCandidates();
+  for (const token of candidates) {
+    const result = await tryAnthropicToken(token);
+    if (result) return result;
+  }
+  return emptySnapshot('anthropic');
 }
 
 type CopilotHostEntry = {
