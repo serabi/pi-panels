@@ -10,6 +10,8 @@ Three panels ship out of the box, each independently toggleable:
 
 Panels auto-size to their content, render side-by-side when terminal width allows, and fall back to a stacked layout on narrow terminals.
 
+![OpenCode Go plan panel showing rolling, weekly, and monthly usage bars](assets/opencode-go-plan.png)
+
 ## Project origin
 
 This repository began as the `packages/pi-panels` package inside [`alasano/house-of-pi`](https://github.com/alasano/house-of-pi).
@@ -49,11 +51,11 @@ The PLAN panel supports the following providers:
 | **Google Antigravity** | Per-model remaining fractions with reset timers |
 | **OpenAI Codex** | Primary and additional rate-limit windows |
 | **OpenCode Zen** | `Pay-as-you-go` (no public usage API) |
-| **OpenCode Go** | Static plan info (`5h $12 · wk $30 · mo $60`) or live monthly usage bar |
+| **OpenCode Go** | Rolling, weekly, and monthly usage bars with reset timers |
 
 ### OpenCode Go live usage (optional)
 
-To show a real monthly usage bar for OpenCode Go instead of static plan info, set these environment variables:
+To show real usage bars for OpenCode Go instead of static plan info, set these environment variables:
 
 ```bash
 export OPENCODE_GO_WORKSPACE_ID="your-workspace-id"
@@ -63,7 +65,7 @@ export OPENCODE_GO_AUTH_COOKIE="your-auth-cookie-value"
 - `OPENCODE_GO_WORKSPACE_ID` — from the URL when you are on `https://opencode.ai/workspace/{id}/go`
 - `OPENCODE_GO_AUTH_COOKIE` — the `auth` cookie value from that same page (check browser dev tools → Application → Cookies)
 
-When both are set, pi-panels scrapes the dashboard page for `monthlyUsage` and renders a percent-used bar with a reset timer.
+When both are set, pi-panels scrapes the dashboard page for rolling, weekly, and monthly usage and renders percent-used bars with reset timers.
 
 ## Requirements
 

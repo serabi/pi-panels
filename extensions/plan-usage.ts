@@ -708,6 +708,42 @@ async function fetchOpencodeUsage(): Promise<PlanSnapshot> {
   };
 }
 
+type OpencodeGoWindowRaw = {
+  label: string;
+  usagePercent: number;
+  resetInSec: number;
+};
+
+function extractOpencodeGoWindow(html: string, key: string): OpencodeGoWindowRaw | undefined {
+  const pctFirst = new RegExp(
+    `${key}:\\$R\\[\\d+\\]=\\{[^}]*usagePercent:(\\d+)[^}]*resetInSec:(\\d+)[^}]*\\}`,
+  ).exec(html);
+  const resetFirst = new RegExp(
+    `${key}:\\$R\\[\\d+\\]=\\{[^}]*resetInSec:(\\d+)[^}]*usagePercent:(\\d+)[^}]*\\}`,
+  ).exec(html);
+
+  let usagePercent: number | undefined;
+  let resetInSec: number | undefined;
+
+  if (pctFirst) {
+    usagePercent = Number(pctFirst[1]);
+    resetInSec = Number(pctFirst[2]);
+  } else if (resetFirst) {
+    resetInSec = Number(resetFirst[1]);
+    usagePercent = Number(resetFirst[2]);
+  }
+
+  if (
+    usagePercent !== undefined &&
+    resetInSec !== undefined &&
+    Number.isFinite(usagePercent) &&
+    Number.isFinite(resetInSec)
+  ) {
+    return { label: key.replace('Usage', ''), usagePercent, resetInSec };
+  }
+  return undefined;
+}
+
 async function fetchOpencodeGoUsage(): Promise<PlanSnapshot> {
   const workspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim();
   const authCookie = process.env.OPENCODE_GO_AUTH_COOKIE?.trim();
@@ -745,45 +781,24 @@ async function fetchOpencodeGoUsage(): Promise<PlanSnapshot> {
 
     const html = await res.text();
 
-    // SolidJS SSR hydration: field order varies, so try both orderings.
-    const pctFirst =
-      /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/.exec(
-        html,
-      );
-    const resetFirst =
-      /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/.exec(
-        html,
-      );
-
-    let usagePercent: number | undefined;
-    let resetInSec: number | undefined;
-
-    if (pctFirst) {
-      usagePercent = Number(pctFirst[1]);
-      resetInSec = Number(pctFirst[2]);
-    } else if (resetFirst) {
-      resetInSec = Number(resetFirst[1]);
-      usagePercent = Number(resetFirst[2]);
+    const windows: PlanWindow[] = [];
+    for (const key of ['rollingUsage', 'weeklyUsage', 'monthlyUsage'] as const) {
+      const raw = extractOpencodeGoWindow(html, key);
+      if (!raw) continue;
+      const resetAt = new Date(Date.now() + raw.resetInSec * 1000);
+      windows.push({
+        label: raw.label,
+        usedPercent: normalizeUsedPercent(raw.usagePercent),
+        resetDescription: formatReset(resetAt),
+        resetAt: resetAt.toISOString(),
+      });
     }
 
-    if (
-      usagePercent !== undefined &&
-      resetInSec !== undefined &&
-      Number.isFinite(usagePercent) &&
-      Number.isFinite(resetInSec)
-    ) {
-      const resetAt = new Date(Date.now() + resetInSec * 1000);
+    if (windows.length > 0) {
       return {
         provider: 'opencode-go',
         displayName: DISPLAY_NAMES['opencode-go'],
-        windows: [
-          {
-            label: 'Monthly',
-            usedPercent: normalizeUsedPercent(usagePercent),
-            resetDescription: formatReset(resetAt),
-            resetAt: resetAt.toISOString(),
-          },
-        ],
+        windows,
       };
     }
   } catch {
