@@ -25,6 +25,7 @@ export type PlanSnapshot = {
   provider: string;
   displayName: string;
   windows: PlanWindow[];
+  statusText?: string;
 };
 
 type PlanRow = {
@@ -154,8 +155,9 @@ export function buildPlanPanel(snapshot: PlanSnapshot, maxInner: number): BuiltP
           {
             label: 'status',
             labelColor: GREEN_FG,
-            measure: 'unknown'.length,
-            renderValue: (valueWidth) => truncateToWidth('unknown', valueWidth, '…', true),
+            measure: (snapshot.statusText || 'unknown').length,
+            renderValue: (valueWidth) =>
+              truncateToWidth(snapshot.statusText || 'unknown', valueWidth, '…', true),
           },
         ];
 

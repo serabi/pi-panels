@@ -14,6 +14,7 @@ export type PlanSnapshot = {
   provider: string;
   displayName: string;
   windows: PlanWindow[];
+  statusText?: string;
 };
 
 type PiModel = {
@@ -21,7 +22,7 @@ type PiModel = {
   id?: string;
 };
 
-type SupportedProvider = 'anthropic' | 'copilot' | 'gemini' | 'antigravity' | 'codex';
+type SupportedProvider = 'anthropic' | 'copilot' | 'gemini' | 'antigravity' | 'codex' | 'opencode' | 'opencode-go';
 
 const API_TIMEOUT_MS = 5000;
 
@@ -31,6 +32,8 @@ const DISPLAY_NAMES: Record<SupportedProvider, string> = {
   gemini: 'Gemini Plan',
   antigravity: 'Antigravity',
   codex: 'Codex Plan',
+  opencode: 'OpenCode Zen',
+  'opencode-go': 'OpenCode Go',
 };
 
 const ANTIGRAVITY_ENDPOINTS = [
@@ -102,6 +105,8 @@ function detectProvider(model: PiModel | undefined): SupportedProvider | undefin
     return 'gemini';
   }
   if (providerValue.includes('codex')) return 'codex';
+  if (providerValue === 'opencode') return 'opencode';
+  if (providerValue === 'opencode-go') return 'opencode-go';
   return undefined;
 }
 
@@ -694,6 +699,105 @@ async function fetchAntigravityUsage(): Promise<PlanSnapshot> {
   };
 }
 
+async function fetchOpencodeUsage(): Promise<PlanSnapshot> {
+  return {
+    provider: 'opencode',
+    displayName: DISPLAY_NAMES.opencode,
+    windows: [],
+    statusText: 'Pay-as-you-go',
+  };
+}
+
+async function fetchOpencodeGoUsage(): Promise<PlanSnapshot> {
+  const workspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim();
+  const authCookie = process.env.OPENCODE_GO_AUTH_COOKIE?.trim();
+
+  if (!workspaceId || !authCookie) {
+    return {
+      provider: 'opencode-go',
+      displayName: DISPLAY_NAMES['opencode-go'],
+      windows: [],
+      statusText: '5h $12 · wk $30 · mo $60',
+    };
+  }
+
+  const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
+  try {
+    const url = `https://opencode.ai/workspace/${encodeURIComponent(workspaceId)}/go`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        Cookie: `auth=${authCookie}`,
+        Accept: 'text/html',
+      },
+      signal: controller.signal,
+    });
+    clear();
+
+    if (!res.ok) {
+      return {
+        provider: 'opencode-go',
+        displayName: DISPLAY_NAMES['opencode-go'],
+        windows: [],
+        statusText: '5h $12 · wk $30 · mo $60',
+      };
+    }
+
+    const html = await res.text();
+
+    // SolidJS SSR hydration: field order varies, so try both orderings.
+    const pctFirst =
+      /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/.exec(
+        html,
+      );
+    const resetFirst =
+      /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/.exec(
+        html,
+      );
+
+    let usagePercent: number | undefined;
+    let resetInSec: number | undefined;
+
+    if (pctFirst) {
+      usagePercent = Number(pctFirst[1]);
+      resetInSec = Number(pctFirst[2]);
+    } else if (resetFirst) {
+      resetInSec = Number(resetFirst[1]);
+      usagePercent = Number(resetFirst[2]);
+    }
+
+    if (
+      usagePercent !== undefined &&
+      resetInSec !== undefined &&
+      Number.isFinite(usagePercent) &&
+      Number.isFinite(resetInSec)
+    ) {
+      const resetAt = new Date(Date.now() + resetInSec * 1000);
+      return {
+        provider: 'opencode-go',
+        displayName: DISPLAY_NAMES['opencode-go'],
+        windows: [
+          {
+            label: 'Monthly',
+            usedPercent: normalizeUsedPercent(usagePercent),
+            resetDescription: formatReset(resetAt),
+            resetAt: resetAt.toISOString(),
+          },
+        ],
+      };
+    }
+  } catch {
+    clear();
+  }
+
+  return {
+    provider: 'opencode-go',
+    displayName: DISPLAY_NAMES['opencode-go'],
+    windows: [],
+    statusText: '5h $12 · wk $30 · mo $60',
+  };
+}
+
 async function fetchForProvider(provider: SupportedProvider): Promise<PlanSnapshot> {
   switch (provider) {
     case 'anthropic':
@@ -706,6 +810,10 @@ async function fetchForProvider(provider: SupportedProvider): Promise<PlanSnapsh
       return fetchAntigravityUsage();
     case 'codex':
       return fetchCodexUsage();
+    case 'opencode':
+      return fetchOpencodeUsage();
+    case 'opencode-go':
+      return fetchOpencodeGoUsage();
   }
 }
 
