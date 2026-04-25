@@ -10,9 +10,9 @@ Three panels ship out of the box, each independently toggleable:
 
 Panels auto-size to their content, render side-by-side when terminal width allows, and fall back to a stacked layout on narrow terminals.
 
-<p align="center">
+<div align="center">
   <img src="assets/opencode-go-plan.png" alt="OpenCode Go plan panel showing rolling, weekly, and monthly usage bars" />
-</p>
+</div>
 
 ## Project origin
 
